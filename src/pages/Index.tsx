@@ -2,6 +2,63 @@ import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 
 type TabId = 'home' | 'payments' | 'history' | 'bills' | 'notifications' | 'profile' | 'support';
+type PayTarget = { title: string; amount: number };
+type PayStage = 'confirm' | 'processing' | 'success';
+
+function PaymentSheet({ target, onClose }: { target: PayTarget; onClose: () => void }) {
+  const [stage, setStage] = useState<PayStage>('confirm');
+
+  const pay = () => {
+    setStage('processing');
+    setTimeout(() => setStage('success'), 1800);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm" onClick={stage !== 'processing' ? onClose : undefined}>
+      <div className="w-full max-w-md rounded-t-3xl bg-card p-6 pb-8 animate-fade-in" onClick={(e) => e.stopPropagation()}>
+        {stage === 'confirm' && (
+          <>
+            <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-muted" />
+            <p className="text-sm text-muted-foreground">Оплата услуги</p>
+            <h3 className="text-xl font-extrabold">{target.title}</h3>
+            <div className="my-5 flex items-baseline justify-between rounded-2xl bg-accent px-4 py-4">
+              <span className="text-sm font-medium text-accent-foreground">Сумма к оплате</span>
+              <span className="text-2xl font-extrabold text-primary">{target.amount.toLocaleString('ru-RU')} ₽</span>
+            </div>
+            <div className="flex items-center gap-3 rounded-2xl border border-border p-3.5">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-muted"><Icon name="CreditCard" size={18} /></span>
+              <div className="flex-1">
+                <p className="text-sm font-semibold">Карта •• 4523</p>
+                <p className="text-xs text-muted-foreground">Демо-режим · деньги не списываются</p>
+              </div>
+              <Icon name="ChevronRight" size={18} className="text-muted-foreground" />
+            </div>
+            <button onClick={pay} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 font-semibold text-primary-foreground transition-transform active:scale-95">
+              <Icon name="Lock" size={18} /> Оплатить {target.amount.toLocaleString('ru-RU')} ₽
+            </button>
+            <button onClick={onClose} className="mt-2 w-full py-2 text-sm font-medium text-muted-foreground">Отмена</button>
+          </>
+        )}
+        {stage === 'processing' && (
+          <div className="flex flex-col items-center py-10">
+            <span className="mb-5 grid h-16 w-16 animate-spin place-items-center rounded-full border-4 border-muted border-t-primary" />
+            <p className="text-lg font-bold">Обрабатываем платёж…</p>
+            <p className="text-sm text-muted-foreground">Пожалуйста, подождите</p>
+          </div>
+        )}
+        {stage === 'success' && (
+          <div className="flex flex-col items-center py-8">
+            <span className="mb-5 grid h-16 w-16 place-items-center rounded-full bg-primary/10 text-primary"><Icon name="Check" size={36} /></span>
+            <p className="text-lg font-extrabold">Оплачено успешно</p>
+            <p className="text-sm text-muted-foreground">{target.title} · {target.amount.toLocaleString('ru-RU')} ₽</p>
+            <p className="mt-1 text-xs text-muted-foreground/70">Демо-платёж · чек отправлен на почту</p>
+            <button onClick={onClose} className="mt-6 w-full rounded-2xl bg-primary py-4 font-semibold text-primary-foreground transition-transform active:scale-95">Готово</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const NAV: { id: TabId; label: string; icon: string }[] = [
   { id: 'home', label: 'Главная', icon: 'House' },
@@ -35,6 +92,7 @@ const NOTIFICATIONS = [
 
 export default function Index() {
   const [tab, setTab] = useState<TabId>('home');
+  const [pay, setPay] = useState<PayTarget | null>(null);
   const total = SERVICES.reduce((s, x) => s + x.amount, 0);
 
   return (
@@ -55,10 +113,10 @@ export default function Index() {
           </div>
         </header>
 
-        {tab === 'home' && <Home total={total} onPay={() => setTab('payments')} />}
-        {tab === 'payments' && <Payments />}
+        {tab === 'home' && <Home total={total} onPayAll={() => setPay({ title: 'Все услуги (июль)', amount: total })} onPayOne={(t) => setPay(t)} />}
+        {tab === 'payments' && <Payments onPay={(t) => setPay(t)} />}
         {tab === 'history' && <History />}
-        {tab === 'bills' && <Bills total={total} />}
+        {tab === 'bills' && <Bills total={total} onPay={() => setPay({ title: 'Квитанция за июль', amount: total })} />}
         {tab === 'notifications' && <Notifications />}
         {tab === 'profile' && <Profile onSupport={() => setTab('support')} />}
         {tab === 'support' && <Support onBack={() => setTab('profile')} />}
@@ -80,6 +138,8 @@ export default function Index() {
           })}
         </div>
       </nav>
+
+      {pay && <PaymentSheet target={pay} onClose={() => setPay(null)} />}
     </div>
   );
 }
@@ -88,13 +148,13 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
   return <div className={`rounded-3xl bg-card p-5 shadow-sm ${className}`}>{children}</div>;
 }
 
-function Home({ total, onPay }: { total: number; onPay: () => void }) {
+function Home({ total, onPayAll, onPayOne }: { total: number; onPayAll: () => void; onPayOne: (t: PayTarget) => void }) {
   return (
     <div className="space-y-5 px-5 animate-fade-in">
       <Card className="bg-primary text-primary-foreground">
         <p className="text-sm/relaxed opacity-80">К оплате в этом месяце</p>
         <p className="mt-1 text-4xl font-extrabold tracking-tight">{total.toLocaleString('ru-RU')} ₽</p>
-        <button onClick={onPay} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-white/15 py-3.5 font-semibold backdrop-blur transition-transform active:scale-95 hover:bg-white/25">
+        <button onClick={onPayAll} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-white/15 py-3.5 font-semibold backdrop-blur transition-transform active:scale-95 hover:bg-white/25">
           <Icon name="Wallet" size={18} /> Оплатить всё
         </button>
       </Card>
@@ -120,7 +180,7 @@ function Home({ total, onPay }: { total: number; onPay: () => void }) {
         <h2 className="mb-3 px-1 text-lg font-bold">Услуги</h2>
         <div className="space-y-2.5">
           {SERVICES.map((s) => (
-            <ServiceRow key={s.name} s={s} />
+            <ServiceRow key={s.name} s={s} onPay={() => onPayOne({ title: s.name, amount: s.amount })} />
           ))}
         </div>
       </div>
@@ -128,9 +188,9 @@ function Home({ total, onPay }: { total: number; onPay: () => void }) {
   );
 }
 
-function ServiceRow({ s }: { s: (typeof SERVICES)[number] }) {
+function ServiceRow({ s, onPay }: { s: (typeof SERVICES)[number]; onPay: () => void }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-card p-3.5 shadow-sm">
+    <button onClick={onPay} className="flex w-full items-center gap-3 rounded-2xl bg-card p-3.5 text-left shadow-sm transition-transform active:scale-[0.98]">
       <span className={`grid h-11 w-11 place-items-center rounded-xl ${s.color}`}>
         <Icon name={s.icon} size={20} />
       </span>
@@ -142,11 +202,11 @@ function ServiceRow({ s }: { s: (typeof SERVICES)[number] }) {
         <p className="text-xs text-muted-foreground">до {s.due}</p>
       </div>
       <p className="font-bold">{s.amount} ₽</p>
-    </div>
+    </button>
   );
 }
 
-function Payments() {
+function Payments({ onPay }: { onPay: (t: PayTarget) => void }) {
   return (
     <div className="space-y-5 px-5 animate-fade-in">
       <h2 className="text-xl font-extrabold">Платежи</h2>
@@ -182,7 +242,7 @@ function Payments() {
             <div key={s.name} className="flex items-center gap-3 rounded-2xl bg-card p-3.5 shadow-sm">
               <span className={`grid h-11 w-11 place-items-center rounded-xl ${s.color}`}><Icon name={s.icon} size={20} /></span>
               <p className="flex-1 font-semibold">{s.name}</p>
-              <button className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-transform active:scale-95">{s.amount} ₽</button>
+              <button onClick={() => onPay({ title: s.name, amount: s.amount })} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-transform active:scale-95">{s.amount} ₽</button>
             </div>
           ))}
         </div>
@@ -221,7 +281,7 @@ function History() {
   );
 }
 
-function Bills({ total }: { total: number }) {
+function Bills({ total, onPay }: { total: number; onPay: () => void }) {
   return (
     <div className="space-y-4 px-5 animate-fade-in">
       <h2 className="text-xl font-extrabold">Счета</h2>
@@ -245,8 +305,8 @@ function Bills({ total }: { total: number }) {
           <span className="font-bold">Итого</span>
           <span className="text-lg font-extrabold text-primary">{total.toLocaleString('ru-RU')} ₽</span>
         </div>
-        <button className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 font-semibold text-primary-foreground transition-transform active:scale-95">
-          <Icon name="Download" size={18} /> Скачать квитанцию
+        <button onClick={onPay} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 font-semibold text-primary-foreground transition-transform active:scale-95">
+          <Icon name="Wallet" size={18} /> Оплатить квитанцию
         </button>
       </Card>
     </div>
